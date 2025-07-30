@@ -155,11 +155,12 @@ router.post('/split-pdf', upload.single("pdf"), async (req, res) => {
 // Merge PDFs
 
 
-const A4_WIDTH = 595.28;
-const A4_HEIGHT = 841.89;
+
 
 
 router.post('/merge-pdfs', upload.array("pdfs"), async (req, res) => {
+    const A4_WIDTH = 595.28;
+    const A4_HEIGHT = 841.89;
     try {
         const mergedPdf = await PDFDocument.create();
 
@@ -206,8 +207,6 @@ router.post('/merge-pdfs', upload.array("pdfs"), async (req, res) => {
         res.status(500).json({ error: "Failed to merge PDFs" });
     }
 });
-
-
 
 
 module.exports = router;
