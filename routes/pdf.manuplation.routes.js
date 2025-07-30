@@ -161,29 +161,38 @@ router.post('/split-pdf', upload.single("pdf"), async (req, res) => {
 router.post('/merge-pdfs', upload.array("pdfs"), async (req, res) => {
     const A4_WIDTH = 595.28;
     const A4_HEIGHT = 841.89;
+
     try {
         const mergedPdf = await PDFDocument.create();
 
         for (const file of req.files) {
             const pdfBytes = fs.readFileSync(file.path);
             const doc = await PDFDocument.load(pdfBytes);
-            const pages = await doc.getPages();
 
-            for (const page of pages) {
-                const [w, h] = page.getSize();
-                const copiedPage = await mergedPdf.embedPage(page);
+            try {
+                const pages = await doc.getPages();
 
-                const scale = Math.min(A4_WIDTH / w, A4_HEIGHT / h);
-                const scaledWidth = w * scale;
-                const scaledHeight = h * scale;
+                for (const page of pages) {
+                    const [w, h] = page.getSize();
+                    const copiedPage = await mergedPdf.embedPage(page);
 
-                const newPage = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT]);
-                newPage.drawPage(copiedPage, {
-                    x: (A4_WIDTH - scaledWidth) / 2,
-                    y: (A4_HEIGHT - scaledHeight) / 2,
-                    width: scaledWidth,
-                    height: scaledHeight,
-                });
+                    const scale = Math.min(A4_WIDTH / w, A4_HEIGHT / h);
+                    const scaledWidth = w * scale;
+                    const scaledHeight = h * scale;
+
+                    const newPage = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT]);
+                    newPage.drawPage(copiedPage, {
+                        x: (A4_WIDTH - scaledWidth) / 2,
+                        y: (A4_HEIGHT - scaledHeight) / 2,
+                        width: scaledWidth,
+                        height: scaledHeight,
+                    });
+                }
+            } catch (embedErr) {
+                console.warn(`embedPage failed for ${file.originalname}. Falling back to copyPages.`, embedErr.message);
+
+                const copiedPages = await mergedPdf.copyPages(doc, doc.getPageIndices());
+                copiedPages.forEach(page => mergedPdf.addPage(page));
             }
         }
 
@@ -204,9 +213,10 @@ router.post('/merge-pdfs', upload.array("pdfs"), async (req, res) => {
 
     } catch (err) {
         console.error("Merge error:", err);
-        res.status(500).json({ error: "Failed to merge PDFs" });
+        res.status(500).json({ error: "Failed to merge PDFs", detail: err.message });
     }
 });
+
 
 
 module.exports = router;
