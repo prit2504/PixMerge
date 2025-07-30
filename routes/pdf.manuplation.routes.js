@@ -1,10 +1,9 @@
 const express = require('express');
 const multer = require('multer');
-const { PDFDocument } = require('pdf-lib');
+const { PDFDocument, rgb } = require('pdf-lib');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-
 const router = express.Router();
 
 // Use /tmp for ephemeral safe deployment
@@ -154,6 +153,12 @@ router.post('/split-pdf', upload.single("pdf"), async (req, res) => {
 
 
 // Merge PDFs
+
+
+const A4_WIDTH = 595.28;
+const A4_HEIGHT = 841.89;
+
+
 router.post('/merge-pdfs', upload.array("pdfs"), async (req, res) => {
     try {
         const mergedPdf = await PDFDocument.create();
@@ -161,8 +166,24 @@ router.post('/merge-pdfs', upload.array("pdfs"), async (req, res) => {
         for (const file of req.files) {
             const pdfBytes = fs.readFileSync(file.path);
             const doc = await PDFDocument.load(pdfBytes);
-            const pages = await mergedPdf.copyPages(doc, doc.getPageIndices());
-            pages.forEach(page => mergedPdf.addPage(page));
+            const pages = await doc.getPages();
+
+            for (const page of pages) {
+                const [w, h] = page.getSize();
+                const copiedPage = await mergedPdf.embedPage(page);
+
+                const scale = Math.min(A4_WIDTH / w, A4_HEIGHT / h);
+                const scaledWidth = w * scale;
+                const scaledHeight = h * scale;
+
+                const newPage = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT]);
+                newPage.drawPage(copiedPage, {
+                    x: (A4_WIDTH - scaledWidth) / 2,
+                    y: (A4_HEIGHT - scaledHeight) / 2,
+                    width: scaledWidth,
+                    height: scaledHeight,
+                });
+            }
         }
 
         const mergedPdfBytes = await mergedPdf.save();
@@ -185,5 +206,8 @@ router.post('/merge-pdfs', upload.array("pdfs"), async (req, res) => {
         res.status(500).json({ error: "Failed to merge PDFs" });
     }
 });
+
+
+
 
 module.exports = router;
